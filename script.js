@@ -4,6 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 const pdfInput = document.getElementById("pdfInput");
 const processBtn = document.getElementById("processBtn");
 const downloadCsvBtn = document.getElementById("downloadCsvBtn");
+const downloadImagesBtn = document.getElementById("downloadImagesBtn");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 
@@ -20,6 +21,7 @@ processBtn.addEventListener("click", async () => {
   extractedProducts = [];
   resultsEl.innerHTML = "";
   downloadCsvBtn.disabled = true;
+  downloadImagesBtn.disabled = true;
 
   statusEl.textContent = "Lendo PDF...";
 
@@ -42,7 +44,6 @@ processBtn.addEventListener("click", async () => {
 
       if (codes.length === 0) continue;
 
-      // Render da página inteira (SEM CORTE)
       const viewport = page.getViewport({ scale: 3 });
 
       const canvas = document.createElement("canvas");
@@ -58,7 +59,6 @@ processBtn.addEventListener("click", async () => {
 
       const imageUrl = canvas.toDataURL("image/jpeg", 0.95);
 
-      // Associa a página inteira a todos os códigos encontrados nela
       codes.forEach((code) => {
         extractedProducts.push({
           codigo: code,
@@ -72,19 +72,18 @@ processBtn.addEventListener("click", async () => {
 
     statusEl.textContent = `Finalizado! ${extractedProducts.length} produtos encontrados.`;
     downloadCsvBtn.disabled = extractedProducts.length === 0;
+    downloadImagesBtn.disabled = extractedProducts.length === 0;
   };
 
   fileReader.readAsArrayBuffer(file);
 });
 
-// Extrai códigos de 6 dígitos
 function extractProductCodes(text) {
   const regex = /\b\d{6}\b/g;
   const matches = text.match(regex) || [];
   return [...new Set(matches)];
 }
 
-// Render dos cards
 function renderCard(code, page, imageUrl) {
   const card = document.createElement("div");
   card.className = "card";
@@ -99,12 +98,11 @@ function renderCard(code, page, imageUrl) {
   resultsEl.appendChild(card);
 }
 
-// Download CSV
 downloadCsvBtn.addEventListener("click", () => {
-  let csv = "codigo,pagina,imagem_base64\n";
+  let csv = "codigo,pagina,nome_arquivo\n";
 
   extractedProducts.forEach(product => {
-    csv += `${product.codigo},${product.pagina},"${product.imagem}"\n`;
+    csv += `${product.codigo},${product.pagina},${product.codigo}_pagina_${product.pagina}.jpg\n`;
   });
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -113,5 +111,28 @@ downloadCsvBtn.addEventListener("click", () => {
   const link = document.createElement("a");
   link.href = url;
   link.download = "produtos.csv";
+  link.click();
+});
+
+downloadImagesBtn.addEventListener("click", async () => {
+  if (extractedProducts.length === 0) {
+    alert("Nenhuma imagem foi gerada ainda.");
+    return;
+  }
+
+  const zip = new JSZip();
+
+  extractedProducts.forEach((product, index) => {
+    const base64Data = product.imagem.split(",")[1];
+    const fileName = `${product.codigo}_pagina_${product.pagina}_${index + 1}.jpg`;
+
+    zip.file(fileName, base64Data, { base64: true });
+  });
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(zipBlob);
+  link.download = "imagens-produtos.zip";
   link.click();
 });
