@@ -28,51 +28,60 @@ processBtn.addEventListener("click", async () => {
   const fileReader = new FileReader();
 
   fileReader.onload = async function () {
-    const typedarray = new Uint8Array(this.result);
-    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+    try {
+      const typedarray = new Uint8Array(this.result);
+      const pdf = await pdfjsLib.getDocument(typedarray).promise;
 
-    statusEl.textContent = `Processando ${pdf.numPages} páginas...`;
+      statusEl.textContent = `Processando ${pdf.numPages} páginas...`;
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      statusEl.textContent = `Página ${pageNum}/${pdf.numPages}`;
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        statusEl.textContent = `Página ${pageNum}/${pdf.numPages}`;
 
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
 
-      const pageText = textContent.items.map(item => item.str).join(" ");
-      const codes = extractProductCodes(pageText);
+        const pageText = textContent.items.map(item => item.str).join(" ");
+        const codes = extractProductCodes(pageText);
 
-      if (codes.length === 0) continue;
+        if (codes.length === 0) continue;
 
-      const viewport = page.getViewport({ scale: 3 });
+        // Scale menor para o ZIP não ficar pesado demais
+        const viewport = page.getViewport({ scale: 1.5 });
 
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
 
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
 
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
 
-      const imageUrl = canvas.toDataURL("image/jpeg", 0.95);
+        const imageUrl = canvas.toDataURL("image/jpeg", 0.85);
 
-      codes.forEach((code) => {
-        extractedProducts.push({
-          codigo: code,
-          pagina: pageNum,
-          imagem: imageUrl
+        codes.forEach((code) => {
+          extractedProducts.push({
+            codigo: code,
+            pagina: pageNum,
+            imagem: imageUrl
+          });
+
+          renderCard(code, pageNum, imageUrl);
         });
+      }
 
-        renderCard(code, pageNum, imageUrl);
-      });
+      statusEl.textContent = `Finalizado! ${extractedProducts.length} produtos encontrados.`;
+
+      downloadCsvBtn.disabled = extractedProducts.length === 0;
+      downloadImagesBtn.disabled = extractedProducts.length === 0;
+
+    } catch (error) {
+      console.error(error);
+      statusEl.textContent = "Erro ao processar o PDF.";
+      alert("Erro ao processar o PDF. Veja se o arquivo está correto.");
     }
-
-    statusEl.textContent = `Finalizado! ${extractedProducts.length} produtos encontrados.`;
-    downloadCsvBtn.disabled = extractedProducts.length === 0;
-    downloadImagesBtn.disabled = extractedProducts.length === 0;
   };
 
   fileReader.readAsArrayBuffer(file);
@@ -92,7 +101,7 @@ function renderCard(code, page, imageUrl) {
     <img src="${imageUrl}" alt="Produto ${code}">
     <strong>Código: ${code}</strong>
     <span>Página: ${page}</span>
-    <a href="${imageUrl}" download="${code}.jpg">Baixar imagem</a>
+    <a href="${imageUrl}" download="${code}_pagina_${page}.jpg">Baixar imagem</a>
   `;
 
   resultsEl.appendChild(card);
@@ -101,8 +110,9 @@ function renderCard(code, page, imageUrl) {
 downloadCsvBtn.addEventListener("click", () => {
   let csv = "codigo,pagina,nome_arquivo\n";
 
-  extractedProducts.forEach(product => {
-    csv += `${product.codigo},${product.pagina},${product.codigo}_pagina_${product.pagina}.jpg\n`;
+  extractedProducts.forEach((product, index) => {
+    const fileName = `${product.codigo}_pagina_${product.pagina}_${index + 1}.jpg`;
+    csv += `${product.codigo},${product.pagina},${fileName}\n`;
   });
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -112,6 +122,8 @@ downloadCsvBtn.addEventListener("click", () => {
   link.href = url;
   link.download = "produtos.csv";
   link.click();
+
+  URL.revokeObjectURL(url);
 });
 
 downloadImagesBtn.addEventListener("click", async () => {
@@ -120,19 +132,44 @@ downloadImagesBtn.addEventListener("click", async () => {
     return;
   }
 
-  const zip = new JSZip();
+  downloadImagesBtn.disabled = true;
+  downloadImagesBtn.textContent = "Gerando ZIP...";
+  statusEl.textContent = "Gerando arquivo ZIP com as imagens...";
 
-  extractedProducts.forEach((product, index) => {
-    const base64Data = product.imagem.split(",")[1];
-    const fileName = `${product.codigo}_pagina_${product.pagina}_${index + 1}.jpg`;
+  try {
+    const zip = new JSZip();
 
-    zip.file(fileName, base64Data, { base64: true });
-  });
+    extractedProducts.forEach((product, index) => {
+      const base64Data = product.imagem.split(",")[1];
+      const fileName = `${product.codigo}_pagina_${product.pagina}_${index + 1}.jpg`;
 
-  const zipBlob = await zip.generateAsync({ type: "blob" });
+      zip.file(fileName, base64Data, { base64: true });
+    });
 
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(zipBlob);
-  link.download = "imagens-produtos.zip";
-  link.click();
+    const zipBlob = await zip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: {
+        level: 6
+      }
+    });
+
+    const url = URL.createObjectURL(zipBlob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "imagens-produtos.zip";
+    link.click();
+
+    URL.revokeObjectURL(url);
+
+    statusEl.textContent = `ZIP gerado com ${extractedProducts.length} imagens.`;
+  } catch (error) {
+    console.error(error);
+    alert("Erro ao gerar o ZIP. Tente reduzir o PDF ou processar menos páginas.");
+    statusEl.textContent = "Erro ao gerar o ZIP.";
+  }
+
+  downloadImagesBtn.disabled = false;
+  downloadImagesBtn.textContent = "Baixar todas imagens";
 });
