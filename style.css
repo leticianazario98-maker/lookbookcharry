@@ -40,7 +40,6 @@ button:disabled {
   font-weight: bold;
 }
 
-/* GRID */
 #results {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -48,7 +47,6 @@ button:disabled {
   margin-top: 24px;
 }
 
-/* CARD */
 .card {
   background: white;
   padding: 12px;
@@ -57,16 +55,14 @@ button:disabled {
   text-align: center;
 }
 
-/* IMAGEM SEM CORTE */
 .card img {
   width: 100%;
   height: auto;
-  object-fit: contain; /* ESSENCIAL */
+  object-fit: contain;
   border-radius: 8px;
   background: #eee;
 }
 
-/* TEXTO */
 .card strong {
   display: block;
   margin-top: 10px;
