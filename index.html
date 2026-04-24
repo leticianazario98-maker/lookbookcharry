@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extrator de Imagens por Código</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <h1>Extrator de imagens do catálogo</h1>
+    <p>Suba o PDF do catálogo para gerar os links das imagens por código.</p>
+
+    <input type="file" id="pdfInput" accept="application/pdf" />
+
+    <button id="processBtn">Processar PDF</button>
+    <button id="downloadCsvBtn" disabled>Baixar CSV</button>
+
+    <p id="status"></p>
+
+    <div id="results"></div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
